@@ -14,6 +14,11 @@ export default function Login() {
     try {
       // Calls the new delivery partner login endpoint we made
       await api.post('/auth/delivery-partner/login', data);
+      
+      // Fix: Set a flag in localStorage so ProtectedRoute can see we are logged in
+      // (The cookie is HTTP-only and invisible to JS)
+      localStorage.setItem('isAuthenticated', 'true');
+
       toast.success('Welcome back, Partner!');
       navigate('/');
     } catch (error) {
