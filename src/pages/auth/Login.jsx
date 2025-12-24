@@ -10,25 +10,35 @@ export default function Login() {
   const { register, handleSubmit, formState: { isSubmitting } } = useForm();
   const navigate = useNavigate();
 
-  // Clear auth state on load to ensure a fresh login attempt
   useEffect(() => {
-    localStorage.removeItem('isAuthenticated');
-  }, []);
+    // If we already have a flag, check if we can actually access a protected route
+    // or just redirect to dashboard directly.
+    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+    if (isAuthenticated) {
+      navigate('/');
+    }
+  }, [navigate]);
 
   const onSubmit = async (data) => {
     try {
-      // Calls the new delivery partner login endpoint we made
+      // 1. Authenticate with backend (Sets HTTP-Only Cookie)
       await api.post('/auth/delivery-partner/login', data);
       
-      // Fix: Set a flag in localStorage so ProtectedRoute can see we are logged in
-      // (The cookie is HTTP-only and invisible to JS)
+      // 2. Set client-side flag for routing
       localStorage.setItem('isAuthenticated', 'true');
 
       toast.success('Welcome back, Partner!');
+      
+      // 3. Navigate to dashboard
+      // We use window.location.href to ensure a clean state load if needed, 
+      // but navigate() is usually sufficient.
       navigate('/');
+      
     } catch (error) {
       console.error(error);
-      toast.error(error.response?.data?.message || 'Login failed');
+      // Ensure we clear any stale state on failure
+      localStorage.removeItem('isAuthenticated');
+      toast.error(error.response?.data?.message || 'Login failed. Please check your credentials.');
     }
   };
 
