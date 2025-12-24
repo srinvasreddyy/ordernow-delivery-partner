@@ -8,7 +8,8 @@ const Dashboard = lazy(() => import('./pages/dashboard/Dashboard'));
 
 // Simple Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
-  // Fix: Check localStorage for authentication state since token is httpOnly
+  // Fix: Check localStorage instead of document.cookie
+  // because the token is httpOnly and JS cannot read it.
   const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
   
   return isAuthenticated ? children : <Navigate to="/login" />; 

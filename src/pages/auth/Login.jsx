@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { User, Lock, ArrowRight } from 'lucide-react';
@@ -9,6 +9,11 @@ import api from '../../api/axios';
 export default function Login() {
   const { register, handleSubmit, formState: { isSubmitting } } = useForm();
   const navigate = useNavigate();
+
+  // Clear auth state on load to ensure a fresh login attempt
+  useEffect(() => {
+    localStorage.removeItem('isAuthenticated');
+  }, []);
 
   const onSubmit = async (data) => {
     try {
@@ -22,6 +27,7 @@ export default function Login() {
       toast.success('Welcome back, Partner!');
       navigate('/');
     } catch (error) {
+      console.error(error);
       toast.error(error.response?.data?.message || 'Login failed');
     }
   };
