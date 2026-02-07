@@ -2,11 +2,28 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Power, MapPin, Navigation, Clock, CheckCircle, Package, Phone, 
-  TrendingUp, ChevronRight, Store, User, LogOut, RefreshCw, Star, Bike 
+  TrendingUp, ChevronRight, Store, User, LogOut, RefreshCw, Star, Bike,
+  ShoppingBag, ArrowRight, DollarSign, Wallet
 } from 'lucide-react';
 import api from '../../api/axios';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
+
+// --- UTILS ---
+const calculateDistance = (coord1, coord2) => {
+    if (!coord1 || !coord2) return '0.0';
+    const [lon1, lat1] = coord1;
+    const [lon2, lat2] = coord2;
+    const R = 3959; // Radius of Earth in miles
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(1);
+};
 
 export default function Dashboard() {
   const [profile, setProfile] = useState(null);
@@ -25,7 +42,7 @@ export default function Dashboard() {
     let interval;
     if (isOnline) {
       fetchOrders();
-      interval = setInterval(fetchOrders, 10000);
+      interval = setInterval(fetchOrders, 15000);
     }
     return () => clearInterval(interval);
   }, [isOnline]);
@@ -45,12 +62,10 @@ export default function Dashboard() {
   const fetchOrders = async () => {
     try {
       setIsRefreshing(true);
-      // Fetch Assigned Orders
-      const assignedRes = await api.get('/delivery/orders?status=out_for_delivery');
+      const assignedRes = await api.get('/delivery/orders?status=ready_for_pickup,out_for_delivery');
       setAssignedOrders(assignedRes.data.data || []);
 
-      // Fetch Completed Orders
-      const completedRes = await api.get('/delivery/orders?status=delivered&limit=10');
+      const completedRes = await api.get('/delivery/orders?status=delivered&limit=5');
       setCompletedOrders(completedRes.data.data || []);
     } catch (error) {
       console.error("Failed to fetch orders", error);
@@ -73,20 +88,24 @@ export default function Dashboard() {
 
   const updateOrderStatus = async (orderId, status) => {
       try {
+          setAssignedOrders(prev => prev.map(o => o._id === orderId ? { ...o, status } : o));
           await api.patch(`/delivery/orders/${orderId}/update-status`, { status });
-          toast.success(`Order marked as ${status.replace(/_/g, ' ')}`);
-          fetchOrders();
+          
+          if (status === 'delivered') {
+              toast.success("Great job! Delivery completed.");
+              fetchOrders(); 
+          } else {
+              toast.success(`Status updated: ${status.replace(/_/g, ' ')}`);
+          }
       } catch (err) {
           toast.error(err.response?.data?.message || "Failed to update status");
+          fetchOrders(); 
       }
   };
 
   const handleLogout = async () => {
     if(!window.confirm("Are you sure you want to log out?")) return;
-    try {
-        await api.post('/auth/logout');
-    } catch(e) { console.error(e); }
-    
+    try { await api.post('/auth/logout'); } catch(e) {}
     localStorage.removeItem('isAuthenticated');
     window.location.href = '/login';
   };
@@ -101,7 +120,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-light pb-24 overflow-hidden relative">
+    <div className="min-h-screen bg-[#f4f7fa] pb-24 overflow-hidden relative font-sans">
       
       {/* --- PROFILE DRAWER --- */}
       <AnimatePresence>
@@ -110,7 +129,7 @@ export default function Dashboard() {
                 <motion.div 
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     onClick={() => setShowProfile(false)}
-                    className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+                    className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm"
                 />
                 <motion.div 
                     initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
@@ -119,56 +138,50 @@ export default function Dashboard() {
                 >
                     <div className="p-6 bg-dark text-white">
                         <h2 className="text-xl font-bold">My Profile</h2>
-                        <p className="text-sm text-gray-400">Manage your account</p>
+                        <p className="text-sm text-gray-400">Driver Account</p>
                     </div>
                     
                     <div className="flex-1 p-6 overflow-y-auto space-y-6">
-                        {/* User Info */}
                         <div className="text-center">
-                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold text-primary">
+                            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold text-primary border-4 border-white shadow-lg">
                                 {profile?.fullName?.charAt(0)}
                             </div>
                             <h3 className="font-bold text-lg text-dark">{profile?.fullName}</h3>
-                            <p className="text-sm text-secondary">@{profile?.username}</p>
-                            <p className="text-sm text-secondary mt-1">{profile?.phoneNumber}</p>
+                            <p className="text-sm text-secondary">{profile?.phoneNumber}</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
+                            <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
                                 <Star className="w-5 h-5 text-yellow-400 mx-auto mb-1 fill-yellow-400" />
-                                <div className="font-bold text-dark">{profile?.deliveryPartnerProfile?.rating || '4.9'}</div>
-                                <div className="text-xs text-secondary">Rating</div>
+                                <div className="font-bold text-dark text-lg">{profile?.deliveryPartnerProfile?.rating || '5.0'}</div>
+                                <div className="text-xs text-secondary font-bold uppercase">Rating</div>
                             </div>
-                            <div className="bg-gray-50 p-3 rounded-xl text-center border border-gray-100">
+                            <div className="bg-gray-50 p-4 rounded-xl text-center border border-gray-100">
                                 <Package className="w-5 h-5 text-blue-500 mx-auto mb-1" />
-                                <div className="font-bold text-dark">{completedOrders.length}</div>
-                                <div className="text-xs text-secondary">Delivered</div>
+                                <div className="font-bold text-dark text-lg">{completedOrders.length}</div>
+                                <div className="text-xs text-secondary font-bold uppercase">Delivered</div>
                             </div>
                         </div>
 
-                        {/* Vehicle Details */}
                         <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                             <h4 className="text-xs font-bold text-secondary uppercase mb-3 flex items-center gap-2">
-                                <Bike className="w-4 h-4"/> Vehicle Details
+                                <Bike className="w-4 h-4"/> Vehicle Info
                             </h4>
                             <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
+                                <div className="flex justify-between border-b border-gray-200 pb-2">
                                     <span className="text-secondary">Type</span>
-                                    <span className="font-medium text-dark capitalize">{profile?.deliveryPartnerProfile?.vehicleType || 'Bike'}</span>
+                                    <span className="font-bold text-dark capitalize">{profile?.deliveryPartnerProfile?.vehicleType || 'Bike'}</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-secondary">Number</span>
-                                    <span className="font-medium text-dark uppercase">{profile?.deliveryPartnerProfile?.vehicleNumber || 'N/A'}</span>
+                                <div className="flex justify-between pt-1">
+                                    <span className="text-secondary">Plate No.</span>
+                                    <span className="font-bold text-dark uppercase">{profile?.deliveryPartnerProfile?.vehicleNumber || 'N/A'}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="p-6 border-t border-gray-100">
-                        <button 
-                            onClick={handleLogout}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors"
-                        >
+                        <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-colors">
                             <LogOut className="w-5 h-5" /> Logout
                         </button>
                     </div>
@@ -177,169 +190,82 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* --- STATUS HEADER --- */}
-      <motion.div 
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-dark text-white rounded-b-[2.5rem] shadow-2xl relative overflow-hidden z-20"
-      >
-        <div className="absolute top-[-50%] right-[-20%] w-80 h-80 bg-primary/20 rounded-full blur-[80px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-60 h-60 bg-blue-500/10 rounded-full blur-[60px]" />
-
-        <div className="p-6 pb-12 relative z-10">
-          {/* Header Top Row */}
+      {/* --- HEADER --- */}
+      <motion.div initial={{ y: -50 }} animate={{ y: 0 }} className="bg-dark text-white rounded-b-[30px] shadow-2xl relative overflow-hidden z-20">
+        <div className="p-6 pb-10 relative z-10">
           <div className="flex justify-between items-start mb-6">
-             {/* Profile Icon */}
-             <button 
-                onClick={() => setShowProfile(true)}
-                className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors"
-             >
+             <button onClick={() => setShowProfile(true)} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center hover:bg-white/20 transition-colors">
                 <User className="w-5 h-5 text-white" />
              </button>
-
-             {/* Restaurant Info Badge */}
-             {profile?.restaurantId && (
-                <div className="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-2 mt-1">
-                    <Store className="w-3.5 h-3.5 text-primary" />
-                    <span className="text-xs font-semibold tracking-wide text-white/90">
-                        {profile.restaurantId.restaurantName}
-                    </span>
-                </div>
-             )}
-             
-             {/* Spacer for alignment */}
-             <div className="w-10" />
+             <div className="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 flex items-center gap-2">
+                <span className={clsx("w-2 h-2 rounded-full animate-pulse", isOnline ? "bg-green-400" : "bg-red-400")}></span>
+                <span className="text-xs font-bold tracking-wide text-white">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+             </div>
           </div>
 
-          <div className="flex justify-between items-center mb-4">
-            <motion.div
-                initial={{ x: -20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-            >
-              <h1 className="text-3xl font-bold tracking-tight">
-                {profile?.fullName?.split(' ')[0]}
-                <span className="text-primary">.</span>
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <span className={clsx("w-2 h-2 rounded-full animate-pulse", isOnline ? "bg-green-400" : "bg-red-400")}></span>
-                <p className="text-slate-400 text-sm font-medium">{isOnline ? 'Online & Searching' : 'Offline'}</p>
-              </div>
-            </motion.div>
-
+          <div className="flex justify-between items-end">
+            <div>
+              <p className="text-gray-400 text-sm font-medium mb-1">Hello, Driver</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white">{profile?.fullName?.split(' ')[0]}</h1>
+            </div>
             <motion.button
               whileTap={{ scale: 0.9 }}
-              whileHover={{ scale: 1.05 }}
               onClick={toggleStatus}
               className={clsx(
-                "w-16 h-16 rounded-2xl shadow-lg flex flex-col items-center justify-center gap-1 transition-all duration-300 border-2",
-                isOnline 
-                  ? "bg-gradient-to-br from-green-500 to-emerald-600 border-green-400 text-white shadow-green-500/30" 
-                  : "bg-slate-800 border-slate-700 text-slate-500"
+                "w-14 h-14 rounded-2xl shadow-lg flex items-center justify-center transition-all duration-300 border-2",
+                isOnline ? "bg-green-500 border-green-400 text-white" : "bg-slate-700 border-slate-600 text-slate-400"
               )}
             >
               <Power className="w-6 h-6" />
             </motion.button>
           </div>
-
-          <div className="grid grid-cols-1 gap-4">
-             <StatCard 
-              icon={<TrendingUp className="w-5 h-5 text-dark" />}
-              label="Total Completed Orders"
-              value={`${completedOrders.length}`}
-              color="bg-white text-dark"
-              delay={0.4}
-            />
-          </div>
         </div>
       </motion.div>
 
-      {/* --- MAIN CONTENT AREA --- */}
-      <div className="px-6 -mt-8 relative z-30 space-y-8">
+      {/* --- CONTENT --- */}
+      <div className="px-5 -mt-6 relative z-30 space-y-6">
         
-        {/* SECTION: OFFLINE STATE */}
-        {!isOnline && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="glass bg-white/60 rounded-3xl border border-white/50 p-8 text-center backdrop-blur-md"
-            >
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                <Power className="w-8 h-8" />
-              </div>
-              <p className="text-dark font-bold text-lg">You are Offline</p>
-              <p className="text-secondary text-sm mt-1">Tap the power button to start delivering.</p>
-            </motion.div>
-        )}
-
-        {/* SECTION: SCANNING (Online but no assigned orders) */}
+        {/* Waiting State */}
         {isOnline && assignedOrders.length === 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-3xl p-8 text-center shadow-xl shadow-gray-200/50 border border-gray-100 relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-50 to-transparent w-full h-full animate-shine opacity-50" />
-              <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 relative">
-                <div className="absolute inset-0 border-4 border-primary/20 rounded-full animate-ping"></div>
-                <MapPin className="w-8 h-8 text-primary relative z-10" />
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-8 text-center shadow-lg border border-gray-100">
+              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4 relative">
+                <div className="absolute inset-0 border-4 border-blue-100 rounded-full animate-ping"></div>
+                <Navigation className="w-8 h-8 text-blue-500 relative z-10" />
               </div>
-              <p className="text-dark font-bold text-lg">Waiting for Orders...</p>
-              <p className="text-secondary text-sm mt-1">Assignments from {profile?.restaurantId?.restaurantName || 'your restaurant'} will appear here.</p>
-              <button 
-                onClick={fetchOrders}
-                disabled={isRefreshing}
-                className="mt-4 text-xs font-bold text-primary flex items-center justify-center gap-1 mx-auto hover:underline"
-              >
-                <RefreshCw className={clsx("w-3 h-3", isRefreshing && "animate-spin")} /> Refresh status
+              <h3 className="text-dark font-bold text-lg">Looking for Orders...</h3>
+              <p className="text-secondary text-sm mt-1">Stay active. New assignments will pop up here instantly.</p>
+              <button onClick={fetchOrders} disabled={isRefreshing} className="mt-6 py-2 px-4 rounded-full bg-gray-50 text-gray-600 text-xs font-bold flex items-center justify-center gap-2 mx-auto hover:bg-gray-100">
+                <RefreshCw className={clsx("w-3 h-3", isRefreshing && "animate-spin")} /> Check Now
               </button>
             </motion.div>
         )}
 
-        {/* SECTION: ASSIGNED ORDERS LIST */}
-        {isOnline && assignedOrders.length > 0 && (
-            <div className="space-y-4">
-                <div className="flex items-center justify-between mb-2 ml-1">
-                    <div className="flex items-center gap-2">
-                        <Package className="w-5 h-5 text-primary" />
-                        <h3 className="font-bold text-dark text-lg">Assigned Orders ({assignedOrders.length})</h3>
-                    </div>
-                    <button onClick={fetchOrders} className="p-1.5 text-secondary hover:bg-gray-100 rounded-lg">
-                        <RefreshCw className={clsx("w-4 h-4", isRefreshing && "animate-spin")} />
-                    </button>
-                </div>
-                
-                <AnimatePresence>
-                    {assignedOrders.map((order, i) => (
-                        <OrderCard 
-                            key={order._id} 
-                            order={order} 
-                            index={i} 
-                            onUpdateStatus={updateOrderStatus} 
-                        />
-                    ))}
-                </AnimatePresence>
-            </div>
-        )}
+        {/* Active Orders */}
+        <AnimatePresence>
+            {assignedOrders.map((order, i) => (
+                <OrderCard key={order._id} order={order} index={i} onUpdateStatus={updateOrderStatus} />
+            ))}
+        </AnimatePresence>
 
-        {/* SECTION: COMPLETED ORDERS LIST */}
-        {completedOrders.length > 0 && (
-             <div className="space-y-4 pt-4 border-t border-gray-200/50">
-                <div className="flex items-center gap-2 mb-2 ml-1 opacity-70">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                    <h3 className="font-bold text-dark text-lg">Recent History</h3>
-                </div>
-                
+        {/* History Preview */}
+        {completedOrders.length > 0 && assignedOrders.length === 0 && (
+             <div className="pt-4">
+                <h3 className="font-bold text-gray-400 text-sm uppercase tracking-wider mb-3 ml-1">Recent Deliveries</h3>
                 <div className="space-y-3">
                     {completedOrders.map((order) => (
-                        <div key={order._id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center opacity-75 grayscale-[0.3]">
-                            <div>
-                                <div className="text-xs font-bold text-gray-400">#{order.orderNumber.slice(-6)}</div>
-                                <div className="font-bold text-dark text-sm">{order.customerDetails?.name}</div>
+                        <div key={order._id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex justify-between items-center opacity-80">
+                            <div className="flex gap-3 items-center">
+                                <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
+                                    <CheckCircle className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <div className="font-bold text-dark text-sm">#{order.orderNumber.slice(-6)}</div>
+                                    <div className="text-xs text-gray-500">{order.restaurantId?.restaurantName}</div>
+                                </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-xs text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded-full">Delivered</div>
-                                <div className="text-[10px] text-gray-400 mt-1">{new Date(order.deliveryDate || order.updatedAt).toLocaleTimeString()}</div>
+                                <span className="text-sm font-bold text-dark">£{order.pricing.totalAmount.toFixed(2)}</span>
+                                <div className="text-[10px] text-gray-400 mt-0.5">{new Date(order.updatedAt).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
                             </div>
                         </div>
                     ))}
@@ -351,80 +277,167 @@ export default function Dashboard() {
   );
 }
 
-// --- SUB COMPONENTS ---
+// --- ORDER CARD COMPONENT ---
 
 function OrderCard({ order, index, onUpdateStatus }) {
+    const isCod = order.paymentType === 'cash';
+    const isPaid = order.paymentStatus === 'paid';
+    
+    // Calculate distance
+    const restaurantCoords = order.restaurantId?.address?.coordinates?.coordinates;
+    const deliveryCoords = order.deliveryAddress?.coordinates?.coordinates;
+    const distance = calculateDistance(restaurantCoords, deliveryCoords);
+
+    // Get Actions based on Status
+    const isReadyForPickup = order.status === 'ready_for_pickup' || order.status === 'preparing' || order.status === 'placed';
+    const isOutForDelivery = order.status === 'out_for_delivery';
+
+    // --- AGGRESSIVE ADDRESS FALLBACK ---
+    // Try fullAddress -> addressLine1 -> City/Landmark -> Generic
+    const addressDisplay = order.deliveryAddress?.fullAddress || 
+                           order.deliveryAddress?.addressLine1 || 
+                           [order.deliveryAddress?.city, order.deliveryAddress?.landmark].filter(Boolean).join(', ') ||
+                           "Address available via Map";
+
     return (
         <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ x: -100, opacity: 0 }}
             transition={{ delay: index * 0.1, type: "spring" }}
-            className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 overflow-hidden border border-gray-100"
+            className="bg-white rounded-3xl shadow-xl shadow-gray-200/60 overflow-hidden border border-gray-100"
         >
-            {/* Header */}
-            <div className="p-6 bg-gradient-to-r from-orange-50 to-white border-b border-orange-100">
-                <div className="flex justify-between items-start mb-3">
-                    <span className="text-xs font-bold bg-white border border-orange-200 text-primary px-3 py-1 rounded-full shadow-sm">
+            {/* 1. Header: Restaurant & Stats */}
+            <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="bg-white border border-gray-200 px-3 py-1 rounded-full text-xs font-bold text-gray-600 shadow-sm">
                         #{order.orderNumber.slice(-6)}
-                    </span>
-                    <span className="text-xs font-bold text-secondary flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-full uppercase">
+                    </div>
+                    <div className={clsx("flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase", 
+                        isOutForDelivery ? "bg-blue-100 text-blue-700" : "bg-orange-100 text-orange-700"
+                    )}>
+                        {isOutForDelivery ? <Bike className="w-3.5 h-3.5"/> : <Package className="w-3.5 h-3.5"/>}
                         {order.status.replace(/_/g, ' ')}
-                    </span>
+                    </div>
                 </div>
-                <h4 className="font-extrabold text-dark text-xl leading-tight">{order.restaurantId.restaurantName}</h4>
-                <p className="text-secondary text-sm flex items-start gap-1 mt-2">
-                    <MapPin className="w-4 h-4 shrink-0 text-primary mt-0.5" />
-                    {order.restaurantId.address?.city}
+                
+                <h3 className="text-xl font-extrabold text-dark leading-tight mb-1">{order.restaurantId.restaurantName}</h3>
+                <p className="text-gray-500 text-sm flex items-center gap-1 mb-4">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.restaurantId.address?.city}, {order.restaurantId.address?.area || 'UK'}
                 </p>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                    <a 
-                        href={`https://www.google.com/maps/search/?api=1&query=${order.restaurantId.address?.coordinates?.coordinates[1]},${order.restaurantId.address?.coordinates?.coordinates[0]}`}
-                        target="_blank" rel="noreferrer"
-                        className="py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-dark flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
-                    >
-                        <Navigation className="w-3 h-3"/> To Store
-                    </a>
-                    <a 
-                         href={`https://www.google.com/maps/search/?api=1&query=${order.deliveryAddress?.coordinates?.coordinates[1]},${order.deliveryAddress?.coordinates?.coordinates[0]}`}
-                         target="_blank" rel="noreferrer"
-                        className="py-2.5 bg-white border border-gray-200 rounded-xl text-xs font-bold text-dark flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
-                    >
-                        <Navigation className="w-3 h-3"/> To Customer
-                    </a>
+
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-white p-2 rounded-xl border border-gray-100 text-center">
+                        <span className="block text-[10px] text-gray-400 uppercase font-bold">Est. Dist</span>
+                        <span className="block text-sm font-bold text-dark">{distance} mi</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-gray-100 text-center">
+                        <span className="block text-[10px] text-gray-400 uppercase font-bold">Items</span>
+                        <span className="block text-sm font-bold text-dark">{order.orderedItems.length}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded-xl border border-gray-100 text-center">
+                        <span className="block text-[10px] text-gray-400 uppercase font-bold">Earn</span>
+                        <span className="block text-sm font-bold text-green-600">£4.50</span> {/* Static or from backend */}
+                    </div>
                 </div>
             </div>
 
-            {/* Body */}
-            <div className="p-6">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 bg-dark rounded-full flex items-center justify-center font-bold text-white text-lg shadow-lg">
-                        {order.customerDetails?.name?.charAt(0)}
+            {/* 2. Body: Customer & Items */}
+            <div className="p-6 space-y-6">
+                
+                {/* Customer Address */}
+                <div className="flex gap-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 text-blue-600">
+                        <Navigation className="w-5 h-5" />
                     </div>
-                    <div className="flex-1">
-                        <h4 className="font-bold text-dark">{order.customerDetails?.name}</h4>
-                        <p className="text-xs font-bold text-secondary uppercase tracking-wider">Customer</p>
+                    <div>
+                        <h4 className="font-bold text-dark text-sm">Deliver To:</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed mt-0.5">
+                            {addressDisplay}
+                        </p>
+                        <div className="flex gap-3 mt-3">
+                            <a href={`tel:${order.customerDetails?.phoneNumber}`} className="bg-gray-100 hover:bg-gray-200 text-dark px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors">
+                                <Phone className="w-3.5 h-3.5" /> Call
+                            </a>
+                            <a 
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${deliveryCoords ? `${deliveryCoords[1]},${deliveryCoords[0]}` : ''}`}
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"
+                            >
+                                <Navigation className="w-3.5 h-3.5" /> Navigate
+                            </a>
+                        </div>
                     </div>
-                    <a href={`tel:${order.customerDetails?.phoneNumber}`} className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center hover:bg-green-200 transition-colors">
-                        <Phone className="w-5 h-5"/>
-                    </a>
                 </div>
 
-                {/* Actions */}
-                <div className="space-y-3">
-                    {order.status === 'out_for_delivery' && (
-                        <>
-                            {order.paymentType === 'cash' && order.paymentStatus === 'pending' && (
-                                <div className="p-4 bg-green-50 border border-green-100 text-green-800 text-sm rounded-2xl flex justify-between items-center">
-                                    <span className="font-medium">Collect Cash</span>
-                                    <span className="font-bold text-lg">£{order.pricing.totalAmount}</span>
+                {/* Order Items List */}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-2 mb-3 text-gray-400 text-xs font-bold uppercase tracking-wider">
+                        <ShoppingBag className="w-3.5 h-3.5" /> Order Summary
+                    </div>
+                    <ul className="space-y-3">
+                        {order.orderedItems.map((item, idx) => (
+                            <li key={idx} className="text-sm">
+                                <div className="flex justify-between items-start">
+                                    <span className="font-bold text-gray-800"><span className="text-primary mr-1">{item.quantity}x</span> {item.itemName}</span>
                                 </div>
-                            )}
-                            <SwipeButton onClick={() => onUpdateStatus(order._id, 'delivered')}>
-                                <CheckCircle className="w-5 h-5 inline mr-2"/>
-                                Complete Delivery
-                            </SwipeButton>
-                        </>
+                                {/* Variants */}
+                                {(item.selectedVariants?.length > 0 || item.selectedAddons?.length > 0) && (
+                                    <div className="text-xs text-gray-500 mt-1 pl-5 border-l-2 border-gray-200">
+                                        {item.selectedVariants?.map(v => v.details?.variantName).join(', ')}
+                                        {item.selectedAddons?.length > 0 && `, +${item.selectedAddons.length} extras`}
+                                    </div>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                {/* Cash To Collect (If COD) */}
+                {isCod && !isPaid && (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                                <DollarSign className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-green-800 uppercase">Collect Cash</p>
+                                <p className="text-xs text-green-600">From Customer</p>
+                            </div>
+                        </div>
+                        <span className="text-xl font-bold text-green-700">£{order.pricing.totalAmount.toFixed(2)}</span>
+                    </div>
+                )}
+                
+                {(!isCod || isPaid) && (
+                     <div className="flex items-center gap-2 text-xs font-bold text-gray-400 bg-gray-50 p-3 rounded-lg justify-center">
+                        <Wallet className="w-4 h-4" /> Order Paid Online (No Cash Needed)
+                     </div>
+                )}
+
+                {/* 3. Action Buttons */}
+                <div className="pt-2">
+                    {/* Scenario A: Driver hasn't started delivery yet */}
+                    {isReadyForPickup && (
+                        <SwipeButton 
+                            onClick={() => onUpdateStatus(order._id, 'out_for_delivery')} 
+                            color="bg-dark hover:bg-black"
+                            icon={<Bike className="w-5 h-5" />}
+                        >
+                            Pickup & Start Delivery
+                        </SwipeButton>
+                    )}
+
+                    {/* Scenario B: Driver is on the way */}
+                    {isOutForDelivery && (
+                        <SwipeButton 
+                            onClick={() => onUpdateStatus(order._id, 'delivered')} 
+                            color="bg-primary hover:bg-orange-600"
+                            icon={<CheckCircle className="w-5 h-5" />}
+                        >
+                            Complete Delivery
+                        </SwipeButton>
                     )}
                 </div>
             </div>
@@ -432,28 +445,17 @@ function OrderCard({ order, index, onUpdateStatus }) {
     );
 }
 
-function StatCard({ icon, label, value, color, delay }) {
-    return (
-        <motion.div 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay, type: "spring" }}
-            className={clsx("rounded-2xl p-4 backdrop-blur-sm border border-white/10", color)}
-        >
-            <div className="mb-2 opacity-80">{icon}</div>
-            <span className="text-xs opacity-70 block mb-0.5">{label}</span>
-            <span className="text-xl font-bold block">{value}</span>
-        </motion.div>
-    );
-}
-
-function SwipeButton({ children, onClick }) {
+function SwipeButton({ children, onClick, color, icon }) {
     return (
         <motion.button 
             whileTap={{ scale: 0.98 }}
             onClick={onClick}
-            className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-base shadow-xl shadow-orange-500/30 hover:bg-orange-600 transition-all flex items-center justify-center relative overflow-hidden group"
+            className={clsx(
+                "w-full py-4 text-white rounded-2xl font-bold text-base shadow-lg transition-all flex items-center justify-center gap-2 relative overflow-hidden group",
+                color
+            )}
         >
+            {icon}
             <span className="relative z-10">{children}</span>
         </motion.button>
     );
