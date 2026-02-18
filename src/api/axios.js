@@ -1,7 +1,9 @@
 import axios from 'axios';
+let baseURL = 'http://localhost:3000/api';
+// let baseURL = 'https://api.kribud.co.uk/api';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api', 
+  baseURL: baseURL, 
   withCredentials: true, 
 });
 
